@@ -30,7 +30,10 @@ static void print_line(const uint8_t *buf, uint16_t len, void *data) {
   speol();
 }
 
-WifiBackpack::WifiBackpack() : client(gs) { }
+WifiBackpack::WifiBackpack() :
+    client(gs),
+    disableHqConnection(false)
+    { }
 
 WifiBackpack::~WifiBackpack() {
   gs.end();
@@ -42,6 +45,8 @@ void WifiBackpack::onAssociate(void *data) {
   wifi.hqConnCount = 0;
 
   if(wifi.indicate) Led.green();
+
+  if (wifi.disableHqConnection) return;
 
   if (HqHandler::use_tls()) {
     // Do a timesync
@@ -61,11 +66,13 @@ void WifiBackpack::onAssociate(void *data) {
 
   // connect to HQ now
   wifi.connectToHq();
-  
+
 }
 
 
 bool WifiBackpack::connectToHq() {
+  if (disableHqConnection) return false;
+
   IPAddress ip;
   if (!gs.parseIpAddress(&ip, HqHandler::host().c_str())) {
     ip = gs.dnsLookup(HqHandler::host().c_str());
@@ -152,6 +159,9 @@ bool WifiBackpack::setup(BackpackInfo *info) {
 
 void WifiBackpack::loop() {
   gs.loop();
+
+  if (disableHqConnection) return;
+
   // detect the connected->disconnected transition state and retry
   if(connectedAt && !client.connected())
   {

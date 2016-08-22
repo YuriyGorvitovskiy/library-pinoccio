@@ -107,13 +107,17 @@ void ScoutHandler::setup() {
   // anyone is commandable (TODO refactor this w/ the command stuff now in Shell)
   Scout.meshListen(2, fieldCommands);
   Scout.meshListen(4, fieldAnnouncements);
-  
+
   memset(announceQ,0,announceQsize*sizeof(char*));
 }
 
 void ScoutHandler::loop() {
   if (Scout.isLeadScout()) {
     leadHQHandle();
+
+    if (WifiModule::instance.bp() && WifiModule::instance.bp()->disableHqConnection)
+      return;
+
     // when the seen (most recent wifi read/write activity) is idle for 5+ minutes, paranoid reassociate
     if(SleepHandler::uptime().seconds - seen > 5*60)
     {
@@ -195,7 +199,7 @@ static bool fieldCommands(NWK_DataInd_t *ind) {
     Serial.println(ret);
     Serial.println(fieldCommandOutput.c_str());
   }
-  
+
   // a command from the command endpoint doesn't get a response
   if(ind->srcEndpoint == 2)
   {
@@ -490,6 +494,7 @@ void leadHQHandle(void) {
     hqIncoming += Scout.handler.bridge;
     Scout.handler.bridge = "";
   } else if (WifiModule::instance.bp()) {
+    if (WifiModule::instance.bp()->disableHqConnection) return;
     if (WifiModule::instance.bp()->client.available()) {
       rsize = hqIncoming.readClient(WifiModule::instance.bp()->client, 128);
       if(rsize > 0) Scout.handler.seen = SleepHandler::uptime().seconds;
@@ -498,7 +503,7 @@ void leadHQHandle(void) {
 
   // only continue if new data to process
   if(rsize <= 0) return;
-  
+
   // Read a block of data and look for packets
   while((nl = hqIncoming.indexOf('\n')) >= 0) {
     // look for a packet
